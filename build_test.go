@@ -3,8 +3,10 @@ package condaenvupdate_test
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/paketo-buildpacks/packit"
+	"github.com/paketo-buildpacks/packit/chronos"
 	"github.com/paketo-buildpacks/packit/scribe"
 	condaenvupdate "github.com/paketo-community/conda-env-update"
 	"github.com/paketo-community/conda-env-update/fakes"
@@ -22,6 +24,8 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 		cnbDir     string
 
 		runner *fakes.Runner
+		clock  chronos.Clock
+		now    time.Time
 
 		build packit.BuildFunc
 	)
@@ -39,8 +43,13 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 
 		runner = &fakes.Runner{}
 
+		now = time.Now()
+		clock = chronos.NewClock(func() time.Time {
+			return now
+		})
+
 		logger := scribe.NewLogger(os.Stdout)
-		build = condaenvupdate.Build(runner, logger)
+		build = condaenvupdate.Build(runner, logger, clock)
 	})
 
 	it.After(func() {
@@ -70,6 +79,9 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 		expectedCondaLayer, err := context.Layers.Get("conda-env")
 		Expect(err).NotTo(HaveOccurred())
 		expectedCondaLayer.Launch = true
+		expectedCondaLayer.Metadata = map[string]interface{}{
+			"built_at": clock.Now().Format(time.RFC3339Nano),
+		}
 
 		expectedCondaCacheLayer, err := context.Layers.Get("conda-env-cache")
 		Expect(err).NotTo(HaveOccurred())
@@ -85,5 +97,6 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 		Expect(runner.ExecuteCall.Receives.CondaEnvPath).To(Equal(expectedCondaLayer.Path))
 		Expect(runner.ExecuteCall.Receives.CondaCachePath).To(Equal(expectedCondaCacheLayer.Path))
 		Expect(runner.ExecuteCall.Receives.WorkingDir).To(Equal(workingDir))
+
 	})
 }

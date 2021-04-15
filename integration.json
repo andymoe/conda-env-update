@@ -1,4 +1,4 @@
 {
-  "miniconda": "/home/ubuntu/workspace/paketo-community/conda",
+  "miniconda": "/home/ubuntu/workspace/paketo-community/miniconda",
   "build-plan": "github.com/paketo-community/build-plan"
 }

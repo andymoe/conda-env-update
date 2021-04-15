@@ -1,7 +1,10 @@
 package condaenvupdate
 
 import (
+	"time"
+
 	"github.com/paketo-buildpacks/packit"
+	"github.com/paketo-buildpacks/packit/chronos"
 	"github.com/paketo-buildpacks/packit/scribe"
 )
 
@@ -17,7 +20,7 @@ type Runner interface {
 // dynamic layer type settings (candaLayer.Launch boolean comes form the buildpack plan)
 // Logging
 // test for all this...
-func Build(runner Runner, logger scribe.Logger) packit.BuildFunc {
+func Build(runner Runner, logger scribe.Logger, clock chronos.Clock) packit.BuildFunc {
 	return func(context packit.BuildContext) (packit.BuildResult, error) {
 		logger.Title("%s %s", context.BuildpackInfo.Name, context.BuildpackInfo.Version)
 
@@ -43,9 +46,14 @@ func Build(runner Runner, logger scribe.Logger) packit.BuildFunc {
 
 		condaLayer.Launch = true
 
+		// if no vendor, run conda clean -pt TODO: Investigate
 		err = runner.Execute(condaLayer.Path, condaCacheLayer.Path, context.WorkingDir)
 		if err != nil {
 			return packit.BuildResult{}, err
+		}
+
+		condaLayer.Metadata = map[string]interface{}{
+			"built_at": clock.Now().Format(time.RFC3339Nano),
 		}
 
 		return packit.BuildResult{
