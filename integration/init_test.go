@@ -72,5 +72,7 @@ func TestIntegration(t *testing.T) {
 	suite := spec.New("Integration", spec.Report(report.Terminal{}), spec.Parallel())
 	suite("Default", testDefault)
 	suite("LayerReuse", testLayerReuse)
+	suite("LockFile", testLockFile)
+	suite("Vendored", testVendored)
 	suite.Run(t)
 }

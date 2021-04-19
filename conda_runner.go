@@ -48,7 +48,6 @@ func (c CondaRunner) ShouldRun(workingDir string, metadata map[string]interface{
 		return false, "", err
 	}
 
-	// Maube we always rebuid on error here too? or do we panic in some way?
 	updatedLockfileSha, err := c.summer.Sum(lockfilePath)
 	if err != nil {
 		return false, "", err
@@ -66,13 +65,11 @@ func (c CondaRunner) Execute(condaLayerPath string, condaCachePath string, worki
 	// conda create <vendor args> (vendor dir exists) - no layer reuse
 	vendorDirExists, err := fileExists(filepath.Join(workingDir, "vendor"))
 	if err != nil {
-		panic(err)
 		return err
 	}
 
 	lockfileExists, err := fileExists(filepath.Join(workingDir, LockfileName))
 	if err != nil {
-		panic(err)
 		return err
 	}
 
@@ -102,13 +99,14 @@ func (c CondaRunner) Execute(condaLayerPath string, condaCachePath string, worki
 		}
 	}
 
+	fmt.Printf("running conda %s", args)
 	err = c.executable.Execute(pexec.Execution{
 		Args: args,
 		Env:  append(os.Environ(), fmt.Sprintf("CONDA_PKGS_DIRS=%s", condaCachePath)),
 	})
 
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("failed to run conda env command: %w", err)
 	}
 	return nil
 }

@@ -26,7 +26,7 @@ func testLayerReuse(t *testing.T, context spec.G, it spec.S) {
 		docker = occam.NewDocker()
 	})
 
-	context("when rebuilding an app without changes", func() {
+	context("when rebuilding an app", func() {
 		var (
 			firstImage      occam.Image
 			secondImage     occam.Image
@@ -59,68 +59,135 @@ func testLayerReuse(t *testing.T, context spec.G, it spec.S) {
 			Expect(os.RemoveAll(source)).To(Succeed())
 		})
 
-		it.Focus("reuses the cached packages layer", func() {
-			var err error
-			source, err = occam.Source(filepath.Join("testdata", "default_app"))
-			Expect(err).NotTo(HaveOccurred())
+		context("when the app has a lockfile and there are no changes between builds", func() {
+			it("reuses the cached packages layer", func() {
+				var err error
+				source, err = occam.Source(filepath.Join("testdata", "with_lock_file"))
+				Expect(err).NotTo(HaveOccurred())
 
-			var logs fmt.Stringer
-			firstImage, logs, err = pack.WithNoColor().Build.
-				WithPullPolicy("never").
-				WithBuildpacks(
-					minicondaBuildpack,
-					buildpack,
-					buildPlanBuildpack,
-				).
-				Execute(name, source)
-			Expect(err).NotTo(HaveOccurred(), logs.String())
+				var logs fmt.Stringer
+				firstImage, logs, err = pack.WithNoColor().Build.
+					WithPullPolicy("never").
+					WithBuildpacks(
+						minicondaBuildpack,
+						buildpack,
+						buildPlanBuildpack,
+					).
+					Execute(name, source)
+				Expect(err).NotTo(HaveOccurred(), logs.String())
 
-			imagesMap[firstImage.ID] = nil
+				imagesMap[firstImage.ID] = nil
 
-			firstContainer, err = docker.Container.Run.
-				WithEnv(map[string]string{"PORT": "8080"}).
-				WithPublish("8080").
-				WithPublishAll().
-				WithCommand("python app.py").
-				Execute(firstImage.ID)
-			Expect(err).NotTo(HaveOccurred())
+				firstContainer, err = docker.Container.Run.
+					WithEnv(map[string]string{"PORT": "8080"}).
+					WithPublish("8080").
+					WithPublishAll().
+					WithCommand("python app.py").
+					Execute(firstImage.ID)
+				Expect(err).NotTo(HaveOccurred())
 
-			containerMap[firstContainer.ID] = nil
+				containerMap[firstContainer.ID] = nil
 
-			Eventually(firstContainer).Should(Serve(ContainSubstring("Hello, world!")).OnPort(8080))
+				Eventually(firstContainer).Should(Serve(ContainSubstring("Hello, world!")).OnPort(8080))
 
-			secondImage, logs, err = pack.WithNoColor().Build.
-				WithPullPolicy("never").
-				WithBuildpacks(
-					minicondaBuildpack,
-					buildpack,
-					buildPlanBuildpack,
-				).
-				Execute(name, source)
-			Expect(err).NotTo(HaveOccurred(), logs.String())
+				secondImage, logs, err = pack.WithNoColor().Build.
+					WithPullPolicy("never").
+					WithBuildpacks(
+						minicondaBuildpack,
+						buildpack,
+						buildPlanBuildpack,
+					).
+					Execute(name, source)
+				Expect(err).NotTo(HaveOccurred(), logs.String())
 
-			imagesMap[secondImage.ID] = nil
+				imagesMap[secondImage.ID] = nil
 
-			// Expect(logs).To(ContainLines(
-			// 	MatchRegexp(fmt.Sprintf(`%s \d+\.\d+\.\d+`, buildpackInfo.Buildpack.Name)),
-			// 	ContainSubstring("Reusing cached layer"),
-			// ))
+				// Expect(logs).To(ContainLines(
+				// 	MatchRegexp(fmt.Sprintf(`%s \d+\.\d+\.\d+`, buildpackInfo.Buildpack.Name)),
+				// 	ContainSubstring("Reusing cached layer"),
+				// ))
 
-			Expect(secondImage.Buildpacks[1].Key).To(Equal(buildpackInfo.Buildpack.ID))
-			Expect(secondImage.Buildpacks[1].Layers["conda-env"].Metadata["built_at"]).To(Equal(firstImage.Buildpacks[1].Layers["conda-env"].Metadata["built_at"]))
-			Expect(secondImage.Buildpacks[1].Layers["conda-env"].Metadata["cache_sha"]).To(Equal(firstImage.Buildpacks[1].Layers["conda-env"].Metadata["cache_sha"]))
+				Expect(secondImage.Buildpacks[1].Key).To(Equal(buildpackInfo.Buildpack.ID))
+				Expect(secondImage.Buildpacks[1].Layers["conda-env"].Metadata["built_at"]).To(Equal(firstImage.Buildpacks[1].Layers["conda-env"].Metadata["built_at"]))
+				Expect(secondImage.Buildpacks[1].Layers["conda-env"].Metadata["lockfile-sha"]).To(Equal(firstImage.Buildpacks[1].Layers["conda-env"].Metadata["lockfile-sha"]))
 
-			secondContainer, err = docker.Container.Run.
-				WithEnv(map[string]string{"PORT": "8080"}).
-				WithPublish("8080").
-				WithPublishAll().
-				WithCommand("python app.py").
-				Execute(secondImage.ID)
-			Expect(err).NotTo(HaveOccurred())
+				secondContainer, err = docker.Container.Run.
+					WithEnv(map[string]string{"PORT": "8080"}).
+					WithPublish("8080").
+					WithPublishAll().
+					WithCommand("python app.py").
+					Execute(secondImage.ID)
+				Expect(err).NotTo(HaveOccurred())
 
-			containerMap[secondContainer.ID] = nil
+				containerMap[secondContainer.ID] = nil
 
-			Eventually(secondContainer).Should(Serve(ContainSubstring("Hello, world!")).OnPort(8080))
+				Eventually(secondContainer).Should(Serve(ContainSubstring("Hello, world!")).OnPort(8080))
+			})
+		})
+
+		context("the app contains no lock file but there are no changes between builds", func() {
+			it("DOES NOT reuse the cached packages layer", func() {
+				var err error
+				source, err = occam.Source(filepath.Join("testdata", "default_app"))
+				Expect(err).NotTo(HaveOccurred())
+
+				var logs fmt.Stringer
+				firstImage, logs, err = pack.WithNoColor().Build.
+					WithPullPolicy("never").
+					WithBuildpacks(
+						minicondaBuildpack,
+						buildpack,
+						buildPlanBuildpack,
+					).
+					Execute(name, source)
+				Expect(err).NotTo(HaveOccurred(), logs.String())
+
+				imagesMap[firstImage.ID] = nil
+
+				firstContainer, err = docker.Container.Run.
+					WithEnv(map[string]string{"PORT": "8080"}).
+					WithPublish("8080").
+					WithPublishAll().
+					WithCommand("python app.py").
+					Execute(firstImage.ID)
+				Expect(err).NotTo(HaveOccurred())
+
+				containerMap[firstContainer.ID] = nil
+
+				Eventually(firstContainer).Should(Serve(ContainSubstring("Hello, world!")).OnPort(8080))
+
+				secondImage, logs, err = pack.WithNoColor().Build.
+					WithPullPolicy("never").
+					WithBuildpacks(
+						minicondaBuildpack,
+						buildpack,
+						buildPlanBuildpack,
+					).
+					Execute(name, source)
+				Expect(err).NotTo(HaveOccurred(), logs.String())
+
+				imagesMap[secondImage.ID] = nil
+
+				// Expect(logs).To(ContainLines(
+				// 	MatchRegexp(fmt.Sprintf(`%s \d+\.\d+\.\d+`, buildpackInfo.Buildpack.Name)),
+				// 	ContainSubstring("Reusing cached layer"),
+				// ))
+
+				Expect(secondImage.Buildpacks[1].Key).To(Equal(buildpackInfo.Buildpack.ID))
+				Expect(secondImage.Buildpacks[1].Layers["conda-env"].Metadata["built_at"]).NotTo(Equal(firstImage.Buildpacks[1].Layers["conda-env"].Metadata["built_at"]))
+
+				secondContainer, err = docker.Container.Run.
+					WithEnv(map[string]string{"PORT": "8080"}).
+					WithPublish("8080").
+					WithPublishAll().
+					WithCommand("python app.py").
+					Execute(secondImage.ID)
+				Expect(err).NotTo(HaveOccurred())
+
+				containerMap[secondContainer.ID] = nil
+
+				Eventually(secondContainer).Should(Serve(ContainSubstring("Hello, world!")).OnPort(8080))
+			})
 		})
 	})
 }

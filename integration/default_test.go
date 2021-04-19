@@ -47,7 +47,7 @@ func testDefault(t *testing.T, context spec.G, it spec.S) {
 			Expect(os.RemoveAll(source)).To(Succeed())
 		})
 
-		it("builds an oci image has the correct beavior", func() {
+		it("builds an oci image that has the correct behavior", func() {
 			var err error
 			source, err = occam.Source(filepath.Join("testdata", "default_app"))
 			Expect(err).NotTo(HaveOccurred())

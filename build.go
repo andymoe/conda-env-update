@@ -11,6 +11,7 @@ import (
 //go:generate faux --interface Runner --output fakes/runner.go
 type Runner interface {
 	Execute(condaEnvPath string, condaCachePath string, workingDir string) error
+	ShouldRun(workingDir string, metadata map[string]interface{}) (bool, string, error)
 }
 
 // todo:
@@ -35,26 +36,32 @@ func Build(runner Runner, logger scribe.Logger, clock chronos.Clock) packit.Buil
 			return packit.BuildResult{}, err
 		}
 
+		run, sha, err := runner.ShouldRun(context.WorkingDir, condaLayer.Metadata)
+		if err != nil {
+			return packit.BuildResult{}, err
+		}
+
+		if run {
+			condaLayer, err = condaLayer.Reset()
+			if err != nil {
+				return packit.BuildResult{}, err
+			}
+
+			// if no vendor, run conda clean -pt TODO: Investigate
+			err = runner.Execute(condaLayer.Path, condaCacheLayer.Path, context.WorkingDir)
+			if err != nil {
+				return packit.BuildResult{}, err
+			}
+
+			condaLayer.Metadata = map[string]interface{}{
+				"built_at":     clock.Now().Format(time.RFC3339Nano),
+				"lockfile-sha": sha,
+			}
+		}
+
+		// TODO: set layer flags based on incoming build plan entries
 		condaCacheLayer.Cache = true
-
-		// Cache check and potential reuse
-
-		condaLayer, err = condaLayer.Reset()
-		if err != nil {
-			return packit.BuildResult{}, err
-		}
-
 		condaLayer.Launch = true
-
-		// if no vendor, run conda clean -pt TODO: Investigate
-		err = runner.Execute(condaLayer.Path, condaCacheLayer.Path, context.WorkingDir)
-		if err != nil {
-			return packit.BuildResult{}, err
-		}
-
-		condaLayer.Metadata = map[string]interface{}{
-			"built_at": clock.Now().Format(time.RFC3339Nano),
-		}
 
 		return packit.BuildResult{
 			Layers: []packit.Layer{

@@ -174,7 +174,22 @@ func testCondaRunner(t *testing.T, context spec.G, it spec.S) {
 				Expect(executable.ExecuteCall.Receives.Execution.Env).To(Equal(append(os.Environ(), fmt.Sprintf("CONDA_PKGS_DIRS=%s", "a-conda-cache-path"))))
 			})
 
-			context.Pend("failures cases", func() {
+			context("failure cases", func() {
+				context("there is an error checking for vendor directory", func() {
+					it.Before(func() {
+						Expect(os.Chmod(workingDir, 0000)).To(Succeed())
+					})
+
+					it.After(func() {
+						Expect(os.Chmod(workingDir, os.ModePerm)).To(Succeed())
+					})
+
+					it("returns an error", func() {
+						err := runner.Execute(condaLayerPath, condaCachePath, workingDir)
+						Expect(err).To(MatchError(ContainSubstring("permission denied")))
+					})
+				})
+
 				context("when the conda command fails to run", func() {
 					it.Before(func() {
 						executable.ExecuteCall.Returns.Error = errors.New("failed to run conda command")
