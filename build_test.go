@@ -109,6 +109,9 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 		// Expect(buffer.String()).To(ContainSubstring("Executing build process")) TODO: Add logging tests
 
 	})
+	//TODO: Assert somewhere that the Build/Cache/Launch layer flags for the
+	//conda packages layer are being set appropriately based on build plan
+	//entries -- (i think?) the buildpack should only flag the layer at build/launch if it's been requested via a build plan entry.
 	context("cached packages should be reused", func() {
 		it.Before(func() {
 			runner.ShouldRunCall.Returns.Bool = false
